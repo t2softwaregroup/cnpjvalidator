@@ -1,0 +1,33 @@
+{
+    "name": "t2softwaregroup/cnpjvalidator",
+    "description": "A simple package to validate CNPJ Alphanumeric.",
+    "type": "library",
+    "license": "MIT",
+    "homepage":"https://www.t2group.com.br/",
+    "keywords":["cnpj", "validation", "validator", "cnpjvalidation", "cnpjvalidator"],
+    "autoload": {
+        "psr-4": {
+            "T2SoftwareGroup\\Cnpjvalidator\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Gelvazio Camargo",
+            "email": "gelvazio@gmail.com"
+        }
+    ],    
+    "require": {
+        "php": "^7.0 || ^8.0 || ^8.1 || ^8.2 || ^8.3 || ^8.4"        
+    },    
+    "require-dev": {
+        "pestphp/pest": "^4.6"
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "scripts": {
+        "test": "pest"
+    }
+}
