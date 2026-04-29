@@ -1,13 +1,13 @@
 <?php
 
-namespace T2Group\Cnpjvalidator;
+namespace T2SoftwareGroup\Cnpjvalidator;
 
 /**
  * @author: Gelvazio Camargo
  * @description: Validador de CNPJ alfanumérico
- * @since   : 2026-04-23
- * @version : 1.1.0
- * @package : T2Group\Cnpjvalidator * 
+ * @since   : 2026-04-29
+ * @version : 1.0.0
+ * @package : T2SoftwareGroup\Cnpjvalidator
  */
 class CnpjValidator
 {
@@ -213,5 +213,104 @@ class CnpjValidator
 
         // Preenche com zeros à esquerda até 14 dígitos
         return str_pad($clean, 14, '0', STR_PAD_LEFT);
+    }
+
+    public static function normalize(?string $cnpj): ?string
+    {
+        return self::removePontuacaoCnpjAlfaNumerico($cnpj);
+    }
+
+    public static function formatNumerico(?string $cnpj): ?string
+    {
+        return self::formatAlfanumerico($cnpj);
+    }
+
+    public static function formatAlfanumerico(?string $cnpj): ?string
+    {
+        return self::format($cnpj);
+    }
+
+    /**
+     * Formata CPF (11 dígitos) ou CNPJ (14 alfanuméricos) para exibição a partir de valor vindo do SQL/bruto.
+     */
+    public static function formatCpfOuCnpjParaExibicao(?string $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $alnum = self::cleanInput($value);
+        if (strlen($alnum) === 14) {
+            return self::formatAlfanumerico($value) ?? $value;
+        }
+
+        $digits = preg_replace('/\D/', '', $value);
+        if (strlen($digits) === 11) {
+            return substr($digits, 0, 3) . '.' . substr($digits, 3, 3) . '.' . substr($digits, 6, 3) . '-' . substr($digits, 9, 2);
+        }
+
+        return $value;
+    }
+
+    /**
+     * Normaliza chaves comuns de documento em uma linha retornada por QueryHelper (SELECT bruto).
+     *
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    public static function formatResultadoSqlDocumentos(array $row): array
+    {
+        foreach (['cpf', 'cpf_cnpj', 'cpf_favorecido'] as $key) {
+            if (! array_key_exists($key, $row) || $row[$key] === null || $row[$key] === '') {
+                continue;
+            }
+            $row[$key] = self::formatCpfOuCnpjParaExibicao((string) $row[$key]);
+        }
+        foreach (['cnpj', 'empresa_cnpj'] as $key) {
+            if (! array_key_exists($key, $row) || $row[$key] === null || $row[$key] === '') {
+                continue;
+            }
+            $formatted = self::formatAlfanumerico((string) $row[$key]);
+            if ($formatted !== null) {
+                $row[$key] = $formatted;
+            }
+        }
+
+        return $row;
+    }
+
+    /**
+     * Normaliza documento para busca (CPF 11 dígitos ou CNPJ 14 alfanuméricos).
+     */
+    public static function normalizeDocumentoBusca(string $documento): string
+    {
+        $alnum = self::cleanInput($documento);
+        if (strlen($alnum) === 14) {
+            return $alnum;
+        }
+
+        return preg_replace('/\D/', '', $documento);
+    }
+
+    /**
+     * Mascaramento para armazenamento em auditoria (LGPD).
+     */
+    public static function maskForAudit(?string $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $n = self::normalize($value);
+        if ($n !== null && strlen($n) === 14) {
+            return substr($n, 0, 2) . '.***.***/****-' . substr($n, -2);
+        }
+
+        $digits = preg_replace('/\D/', '', $value);
+        if (strlen($digits) === 11) {
+            return substr($digits, 0, 3) . '.***.***-' . substr($digits, -2);
+        }
+
+        return '***';
     }
 }

@@ -1,6 +1,6 @@
 <?php
 
-use T2Group\Cnpjvalidator\CnpjValidator;
+use T2SoftwareGroup\Cnpjvalidator\CnpjValidator;
 
 /**
  * CNPJs válidos (DV módulo 11, critério CNPJ alfanumérico) usados como massa de teste.
@@ -317,5 +317,141 @@ describe('formatCnab', function () {
     test('lança RuntimeException para letras minúsculas', function () {
         expect(fn () => CnpjValidator::formatCnab('12abc345000188'))
             ->toThrow(\RuntimeException::class, 'CNAB não suporta CNPJ alfanumérico');
+    });
+});
+
+describe('normalize', function () {
+    test('equivale a removePontuacaoCnpjAlfaNumerico para string', function () {
+        expect(CnpjValidator::normalize('12.aBc-34/5'))
+            ->toBe(CnpjValidator::removePontuacaoCnpjAlfaNumerico('12.aBc-34/5'))
+            ->toBe('12ABC345');
+    });
+
+    test('retorna string vazia para null', function () {
+        expect(CnpjValidator::normalize(null))->toBe('');
+    });
+});
+
+describe('formatAlfanumerico', function () {
+    test('delega para format com CNPJ válido', function () {
+        expect(CnpjValidator::formatAlfanumerico('11444777000161'))
+            ->toBe('11.444.777/0001-61');
+        expect(CnpjValidator::formatAlfanumerico('12ABC345000188'))
+            ->toBe('12.ABC.345/0001-88');
+    });
+
+    test('retorna null quando format retorna null', function () {
+        expect(CnpjValidator::formatAlfanumerico(null))->toBeNull();
+        expect(CnpjValidator::formatAlfanumerico(''))->toBeNull();
+        expect(CnpjValidator::formatAlfanumerico('123'))->toBeNull();
+    });
+});
+
+describe('formatNumerico', function () {
+    test('comporta-se como formatAlfanumerico', function () {
+        expect(CnpjValidator::formatNumerico('11444777000161'))
+            ->toBe(CnpjValidator::formatAlfanumerico('11444777000161'));
+    });
+});
+
+describe('formatCpfOuCnpjParaExibicao', function () {
+    test('retorna null para null ou string vazia', function ($input) {
+        expect(CnpjValidator::formatCpfOuCnpjParaExibicao($input))->toBeNull();
+    })->with([
+        [null],
+        [''],
+    ]);
+
+    test('formata CNPJ numérico e alfanumérico com 14 posições após limpeza', function () {
+        expect(CnpjValidator::formatCpfOuCnpjParaExibicao('11444777000161'))
+            ->toBe('11.444.777/0001-61');
+        expect(CnpjValidator::formatCpfOuCnpjParaExibicao('12.ABC.345/0001-88'))
+            ->toBe('12.ABC.345/0001-88');
+    });
+
+    test('formata CPF com 11 dígitos', function () {
+        expect(CnpjValidator::formatCpfOuCnpjParaExibicao('12345678901'))
+            ->toBe('123.456.789-01');
+        expect(CnpjValidator::formatCpfOuCnpjParaExibicao('123.456.789-01'))
+            ->toBe('123.456.789-01');
+    });
+
+    test('devolve o valor original se não for CPF nem CNPJ pelo critério de tamanho', function () {
+        expect(CnpjValidator::formatCpfOuCnpjParaExibicao('12345'))->toBe('12345');
+        expect(CnpjValidator::formatCpfOuCnpjParaExibicao('ABC'))->toBe('ABC');
+    });
+});
+
+describe('formatResultadoSqlDocumentos', function () {
+    test('formata chaves de CPF e CNPJ conhecidas e ignora ausentes ou vazias', function () {
+        $row = [
+            'nome' => 'X',
+            'cpf' => '12345678901',
+            'cnpj' => '11444777000161',
+            'outro' => '99',
+            'vazio' => '',
+        ];
+        $out = CnpjValidator::formatResultadoSqlDocumentos($row);
+        expect($out['nome'])->toBe('X');
+        expect($out['cpf'])->toBe('123.456.789-01');
+        expect($out['cnpj'])->toBe('11.444.777/0001-61');
+        expect($out['outro'])->toBe('99');
+        expect($out['vazio'])->toBe('');
+    });
+
+    test('formata cpf_cnpj, cpf_favorecido e empresa_cnpj', function () {
+        $row = [
+            'cpf_cnpj' => '12ABC345000188',
+            'cpf_favorecido' => '529.982.247-25',
+            'empresa_cnpj' => '11.444.777/0001-61',
+        ];
+        $out = CnpjValidator::formatResultadoSqlDocumentos($row);
+        expect($out['cpf_cnpj'])->toBe('12.ABC.345/0001-88');
+        expect($out['cpf_favorecido'])->toBe('529.982.247-25');
+        expect($out['empresa_cnpj'])->toBe('11.444.777/0001-61');
+    });
+
+    test('não altera cnpj quando formatAlfanumerico retorna null', function () {
+        $row = ['cnpj' => '123'];
+        $out = CnpjValidator::formatResultadoSqlDocumentos($row);
+        expect($out['cnpj'])->toBe('123');
+    });
+});
+
+describe('normalizeDocumentoBusca', function () {
+    test('retorna 14 alfanuméricos em maiúsculas para CNPJ', function () {
+        expect(CnpjValidator::normalizeDocumentoBusca('12.ABC.345/0001-88'))
+            ->toBe('12ABC345000188');
+    });
+
+    test('retorna apenas dígitos para documento que não fecha 14 alfanuméricos', function () {
+        expect(CnpjValidator::normalizeDocumentoBusca('123.456.789-01'))->toBe('12345678901');
+        expect(CnpjValidator::normalizeDocumentoBusca('1144477700016'))->toBe('1144477700016');
+    });
+});
+
+describe('maskForAudit', function () {
+    test('retorna null para null ou vazio', function ($input) {
+        expect(CnpjValidator::maskForAudit($input))->toBeNull();
+    })->with([
+        [null],
+        [''],
+    ]);
+
+    test('mascara CNPJ com 14 caracteres após normalização', function () {
+        expect(CnpjValidator::maskForAudit('11.444.777/0001-61'))
+            ->toBe('11.***.***/****-61');
+        expect(CnpjValidator::maskForAudit('12.ABC.345/0001-88'))
+            ->toBe('12.***.***/****-88');
+    });
+
+    test('mascara CPF com 11 dígitos', function () {
+        expect(CnpjValidator::maskForAudit('123.456.789-01'))
+            ->toBe('123.***.***-01');
+    });
+
+    test('retorna asteriscos para valor que não é CPF nem CNPJ pelo critério usado', function () {
+        expect(CnpjValidator::maskForAudit('12345'))->toBe('***');
+        expect(CnpjValidator::maskForAudit('texto'))->toBe('***');
     });
 });
